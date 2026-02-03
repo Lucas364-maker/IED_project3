@@ -1,12 +1,7 @@
-/* =====================================
-   Dual IR Line Follower Robot
-   LOW  = BLACK
-   HIGH = WHITE
-   Motor style: forward + reverse turning
-   ===================================== */
 
 #include <Servo.h>
-
+#include <LiquidCrystal_I2C.h>
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 Servo myservo;
 int pos=0;// ---------- IR Sensor Pins ----------
 #define IR_LEFT_Pin   A1
@@ -32,6 +27,7 @@ int pos=0;// ---------- IR Sensor Pins ----------
 long pulseDuration;
 int Distance;
 int ultraState;   // 1 = obstacle, 0 = no obstacle
+bool missionStarted = false;
 
 void setup() {
   Serial.begin(9600);
@@ -48,24 +44,59 @@ pinMode(BUZZER_PIN, OUTPUT);
   pinMode(motor_board_input_pin_IN3, OUTPUT);
   pinMode(motor_board_input_pin_IN4, OUTPUT);
 
-  // pinMode(BUZZER_PIN, OUTPUT);
-  // servo attach will be here later
+  lcd.init();
+lcd.backlight();
+lcd.clear();
+lcd.print("READY FOR YOUR");
+lcd.setCursor(0,1);
+lcd.print("MEAL");
 
   Brake();
   Serial.println("Line Follower Started");
 }
 
 void loop() {
+if (!missionStarted) {
+     lcdReady();
 
+    int ultraState = readUltrasonicDigital();
+    if (ultraState == 1) {
+      missionStarted = true;   // LATCH
+      Serial.println("TARGET HIT → DELIVERY STARTED");
+    }
+
+    Brake();
+    return;   // do nothing else until hit
+  }
+lcdDelivering();
 lineFollowerLogic();
 decision();
 
 
 }
 
-// ---------- MOTOR FUNCTIONS ----------
 
-// Forward
+void lcdReady() {
+  static bool shown = false;
+  if (!shown) {
+    lcd.clear();
+    lcd.print("READY FOR YOUR");
+    lcd.setCursor(0,1);
+    lcd.print("MEAL");
+    shown = true;
+  }
+}
+
+void lcdDelivering() {
+  static bool shown = false;
+  if (!shown) {
+    lcd.clear();
+    lcd.print("DELIVERING");
+    shown = true;
+  }
+}
+
+
 void Forward() {
   analogWrite(motor_board_input_pin_IN3, 90);
   analogWrite(motor_board_input_pin_IN1, 90);
@@ -88,14 +119,44 @@ void Turn_left() {
   analogWrite(motor_board_input_pin_IN2, 0);
   analogWrite(motor_board_input_pin_IN4, 0);
 }
-
-// Stop
 void Brake() {
   analogWrite(motor_board_input_pin_IN1, 0);
   analogWrite(motor_board_input_pin_IN4, 0);
   analogWrite(motor_board_input_pin_IN2, 0);
   analogWrite(motor_board_input_pin_IN3, 0);
 }
+// Stop
+void Brake1() {
+  analogWrite(motor_board_input_pin_IN1, 0);
+  analogWrite(motor_board_input_pin_IN4, 0);
+  analogWrite(motor_board_input_pin_IN2, 0);
+  analogWrite(motor_board_input_pin_IN3, 0);
+       for (int i = 0; i < 2; i++) {
+    myservo.write(0);   // forward rotation
+    delay(1000); 
+
+    
+    
+    myservo.write(90);   // forward rotation
+    delay(1000); 
+         // small pause between rotations
+  }
+
+  delay(5000);
+
+for (int i = 0; i < 2; i++) {
+    myservo.write(270);   // forward rotation
+    delay(1000); 
+
+    
+    
+    myservo.write(90);   // forward rotation
+    delay(1000); 
+         // small pause between rotations
+  }
+  delay(5000);
+}
+
 
 
 // ---------- ULTRASONIC DIGITAL FUNCTION ----------
@@ -126,31 +187,8 @@ void lineFollowerLogic() {
   }
   else {
     Serial.println("servo");
-    Brake();
-     for (int i = 0; i < 2; i++) {
-    myservo.write(0);   // forward rotation
-    delay(1000); 
+    Brake1();
 
-    
-    
-    myservo.write(90);   // forward rotation
-    delay(1000); 
-         // small pause between rotations
-  }
-
-  delay(5000);
-
-for (int i = 0; i < 2; i++) {
-    myservo.write(270);   // forward rotation
-    delay(1000); 
-
-    
-    
-    myservo.write(90);   // forward rotation
-    delay(1000); 
-         // small pause between rotations
-  }
-  delay(5000);
 
 }
   delay(1);

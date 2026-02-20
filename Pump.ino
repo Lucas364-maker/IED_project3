@@ -37,7 +37,7 @@ volatile bool hitDetected = false;
 int bedNumber = 0;
 unsigned long hitTime = 0;
 const unsigned long HIT_TIMEOUT = 5000;
-bool deliverydone=false;
+bool deliverydone = false;
 
 // ---------- States ----------
 enum State { WAITING, COUNTDOWN, DELIVERING };
@@ -72,6 +72,7 @@ void setup() {
   lcd.clear();
   lcd.print("Waiting for hit");
 
+  // Enable interrupt
   PCICR |= B00000100;
   PCMSK2 |= B00010000;
 
@@ -81,22 +82,25 @@ void setup() {
 // ---------- LOOP ----------
 void loop() {
 
-  if (hitDetected) {
-    hitDetected = false;
+if (hitDetected) {
 
-    bedNumber++;
-    if (bedNumber > 2) bedNumber = 1;
+  hitDetected = false;
 
-    lcd.clear();
-    lcd.print("Bed ");
-    lcd.print(bedNumber);
+  bedNumber++;
+  if (bedNumber > 2) bedNumber = 1;   // cycle 1 → 2 → 1 → 2
 
-    hitTime = millis();
-    state = COUNTDOWN;
-  }
+  lcd.clear();
+  lcd.print("Bed ");
+  lcd.print(bedNumber);
+
+  hitTime = millis();
+  state = COUNTDOWN;
+}
 
   if (state == COUNTDOWN && millis() - hitTime >= HIT_TIMEOUT) {
+
     state = DELIVERING;
+
     lcd.clear();
     lcd.print("Food delivering");
     lcd.setCursor(0,1);
@@ -112,10 +116,7 @@ void loop() {
 // ---------- INTERRUPT ----------
 ISR(PCINT2_vect) {
   if (!digitalRead(TARGET_PIN)) {
-    delayMicroseconds(300);
-    if (!digitalRead(TARGET_PIN)) {
-      hitDetected = true;
-    }
+    hitDetected = true;
   }
 }
 
@@ -125,244 +126,140 @@ void lineFollowerWithObstacle() {
   int leftIR  = digitalRead(IR_LEFT);
   int rightIR = digitalRead(IR_RIGHT);
   int distance = getDistance();
-Serial.println(distance);
-  /* =========================
-         BED 1 LOGIC
-     ========================= */
-  if (bedNumber == 1) {
 
-    // ---- OBSTACLE ----
-    if ( distance <= obstacleDistance) { //distance > 0 &&
-      Serial.println("Stop obstacle");
-      stopMotors();
-      unsigned long start = millis();
-       while (millis() - start < 5000) {
+  Serial.println(distance);
+
+  if (distance > 0 && distance <= obstacleDistance) {
+
+    stopMotors();
+  tone(BUZZER_PIN,200);
+      delay(200);
+      noTone(BUZZER_PIN);
+    unsigned long start = millis();
+    while (millis() - start < 5000) {
       if (getDistance() > obstacleDistance) {
-        noTone(BUZZER_PIN);
         return;
       }
     }
-     // Still there → deliver
-    noTone(BUZZER_PIN);
+
+    // Deliver
     servoBackFront();
     rotate360();
-    Serial.println("rotate360");
-    moveForward();
-     Serial.println("movingforward with delay");
-    delay(1000);
-    turnRight();
-    delay(1000);
-     Serial.println("turning right with delay");
-    deliverydone=true;
 
-    
-    }
-    
-    if (!deliverydone){
-    if (leftIR == LOW && rightIR == LOW) {
+    if (bedNumber == 1) {
       moveForward();
-      Serial.println("noForwarddone");}
-
-    else if (leftIR == HIGH && rightIR == HIGH) {
-      turnLeft();
-      Serial.println("noLeftdone");}
-    
-    else if (leftIR == LOW && rightIR == HIGH) {
-      turnLeft();
-      Serial.println("norlefttdone");}
-
-    else if (leftIR == HIGH && rightIR == LOW) {
+      delay(1000);
       turnRight();
-      Serial.println("norightdone");}
+      delay(1000);
     }
     else {
-       if (leftIR == LOW && rightIR == LOW) {
       moveForward();
-      Serial.println("Forward  done");}
-
-    else if (leftIR == HIGH && rightIR == HIGH) {
-      stopMotors();
-      Serial.println("stop done");}
-    
-    else if (leftIR == LOW && rightIR == HIGH) {
-      turnLeft();           
-      Serial.println("turnleft  done ");}
-
-    else if (leftIR == HIGH && rightIR == LOW) {
-      turnRight();
-      Serial.println("turnright  done");}
-      
-
+      delay(1000);
+      turnLeft();
+      delay(1000);
     }
 
-    
-
-
-
-   
+    deliverydone = true;
   }
-  /* =========================
-         BED 2 LOGIC
-     ========================= */
-  else if (bedNumber == 2)  {
 
-    // ---- OBSTACLE ----
-    if ( distance <= obstacleDistance) { //distance > 0 &&
-      Serial.println("Stop obstacle");
-      stopMotors();
-      unsigned long start = millis();
-       while (millis() - start < 5000) {
-      if (getDistance() > obstacleDistance) {
-        noTone(BUZZER_PIN);
-        return;
-      }
-    }
-     // Still there → deliver
-    noTone(BUZZER_PIN);
-    servoBackFront();
-    rotate360();
-    Serial.println("rotate360");
-    moveForward();
-     Serial.println("moving forward wiht delay");
-    delay(1000);
-    turnLeft();
-    delay(1000);
-     Serial.println("turning left with delay");
+  if (!deliverydone) {
 
-    deliverydone=true;
-
-    
-    }
-    
-    if (!deliverydone){
     if (leftIR == LOW && rightIR == LOW) {
       moveForward();
-      Serial.println("noForwarddone");}
-
+    }
     else if (leftIR == HIGH && rightIR == HIGH) {
-      turnRight();
-      Serial.println("norightdone");}
-    
+      if (bedNumber == 1)
+        turnLeft();
+      else
+        turnRight();
+    }
     else if (leftIR == LOW && rightIR == HIGH) {
       turnLeft();
-      Serial.println("nolefttdone");}
-
+    }
     else if (leftIR == HIGH && rightIR == LOW) {
       turnRight();
-      Serial.println("norightdone");}
     }
-    else {
-       if (leftIR == LOW && rightIR == LOW) {
-      moveForward();
-      Serial.println("Forward  done");}
+  }
+  else {
 
+    if (leftIR == LOW && rightIR == LOW) {
+      moveForward();
+    }
     else if (leftIR == HIGH && rightIR == HIGH) {
       stopMotors();
-      Serial.println("stop done");}
-    
+    }
     else if (leftIR == LOW && rightIR == HIGH) {
-      turnLeft();           
-      Serial.println("turnleft  done ");}
-
+      turnLeft();
+    }
     else if (leftIR == HIGH && rightIR == LOW) {
       turnRight();
-      Serial.println("turnleft  done");}
-      
-
     }
-
-    
-
-
-
-   
   }
 }
 
 // ---------- ULTRASONIC ----------
 int getDistance() {
 
-   long pulseDuration; //variable needed by the ultrasound sensor code
-  
+  long pulseDuration;
 
   digitalWrite(TRIG_PIN, LOW);
   delayMicroseconds(2);
 
   digitalWrite(TRIG_PIN, HIGH);
   delayMicroseconds(10);
-
   digitalWrite(TRIG_PIN, LOW);
 
-  pulseDuration= pulseIn(ECHO_PIN, HIGH);
-  //if (d == 0) return -1;
+  pulseDuration = pulseIn(ECHO_PIN, HIGH, 25000);
 
-  return  pulseDuration/ 58;
+  if (pulseDuration == 0) return -1;
+
+  return pulseDuration / 58;
 }
 
-// ---------- SERVO FUNCTION ----------
+// ---------- SERVO ----------
 void servoBackFront() {
-
-  Serial.println("Servo Activated");
 
   tone(BUZZER_PIN, 200);
 
   scanServo.write(SERVO_BACKWARD);
   delay(3000);
 
-
-
-
   scanServo.write(SERVO_STOP);
-  noTone(BUZZER_PIN);
-  delay(500);
-
-  tone(BUZZER_PIN, 200);
+  delay(5000);
 
   scanServo.write(SERVO_FORWARD);
   delay(3000);
 
   scanServo.write(SERVO_STOP);
+
   noTone(BUZZER_PIN);
 }
-
 // ---------- MOTOR CONTROL ----------
 void moveForward() {
-
-  analogWrite(LM1,130); analogWrite(LM2,0);
-  analogWrite(RM1,130);   analogWrite(RM2,0);
+  analogWrite(LM1,115); analogWrite(LM2,0);
+  analogWrite(RM1,130); analogWrite(RM2,0);
 }
 
 void turnLeft() {
-
   analogWrite(LM1,0);   analogWrite(LM2,0);
-  analogWrite(RM2,0);   analogWrite(RM1,110);
+  analogWrite(RM1,130); analogWrite(RM2,0);
 }
 
 void turnRight() {
- 
-  analogWrite(LM1,110); analogWrite(LM2,0);
-  analogWrite(RM2,0);   analogWrite(RM1,0);
-} 
+  analogWrite(LM1,130); analogWrite(LM2,0);
+  analogWrite(RM1,0);   analogWrite(RM2,0);
+}
 
 void stopMotors() {
- 
   analogWrite(LM1,0); analogWrite(LM2,0);
-  analogWrite(RM2,0); analogWrite(RM1,0);
+  analogWrite(RM1,0); analogWrite(RM2,0);
 }
 
 void rotate360() {
-
-  Serial.println("Rotating 360");
-
-  // Left motor forward
-  analogWrite(LM1, 130);
-  analogWrite(LM2, 0);
-
-  // Right motor backward
-  analogWrite(RM2, 130);
-  analogWrite(RM1,0);
-
-  delay(1000);   
-
+   analogWrite(LM1,250); analogWrite(LM2,0);
+  analogWrite(RM2,250); analogWrite(RM1,0);
+  delay(600);
   stopMotors();
-}
+  delay(1000);
+
+} 
